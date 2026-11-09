@@ -1,9 +1,8 @@
-import 'dart:io';
-
 class AppConfig {
   // Ganti URL ini dengan URL Web App Google Apps Script Anda yang telah di-Deploy
   // Format: https://script.google.com/macros/s/AKfycb.../exec
-  static String webAppUrl = '';
+  static String webAppUrl =
+      'https://script.google.com/macros/s/AKfycbylVCHwtCHXMnDR9ZAfgTcEuPbeazAh6RzEtIWcP3ccLqH2yx1YeaQZ6yZMCOMHGZ8b8Q/exec';
 
   // Spreadsheet ID yang digunakan di Google Apps Script (sebagai referensi)
   static const String sheetId = '11S2EJ79oNoaBytsZnR7b-wAQ7UcLBwVSIhVMttcZgLk';

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/krupuk_model.dart';
 import '../models/penjualan_model.dart';
@@ -10,83 +10,62 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // Helper method untuk GET request dengan penanganan redirect Google Apps Script
+  // Helper method untuk GET request
   Future<String> _get(String action) async {
     final baseUrl = AppConfig.webAppUrl.trim();
     if (baseUrl.isEmpty) {
-      throw Exception('URL Web App Google Apps Script belum disetting. Silakan buka menu Pengaturan (ikon gerigi).');
+      throw Exception(
+          'URL Web App Google Apps Script belum disetting. Silakan buka menu Pengaturan (ikon gerigi).');
     }
 
     final uri = Uri.parse(baseUrl).replace(queryParameters: {'action': action});
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 15);
 
     try {
-      final request = await client.getUrl(uri);
-      // Ikuti redirect otomatis untuk GET
-      request.followRedirects = true;
-      request.maxRedirects = 5;
-
-      final response = await request.close().timeout(const Duration(seconds: 20));
-      final responseBody = await response.transform(utf8.decoder).join();
+      final response = await http.get(uri).timeout(const Duration(seconds: 25));
 
       if (response.statusCode >= 200 && response.statusCode < 400) {
-        return responseBody;
+        return response.body;
       } else {
-        throw Exception('Server mengembalikan kode error: ${response.statusCode}');
+        throw Exception('Server mengembalikan kode status: ${response.statusCode}');
       }
-    } on SocketException catch (_) {
-      throw Exception('Tidak ada koneksi internet atau server Google Apps Script tidak dapat dihubungi.');
-    } finally {
-      client.close();
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Gagal menghubungi server: $e');
     }
   }
 
-  // Helper method untuk POST request khusus Google Apps Script (menangani 302 redirect)
+  // Helper method untuk POST request (Cross-platform Android, iOS, Web, Desktop)
   Future<String> _post(Map<String, String> params) async {
     final baseUrl = AppConfig.webAppUrl.trim();
     if (baseUrl.isEmpty) {
-      throw Exception('URL Web App Google Apps Script belum disetting. Silakan buka menu Pengaturan (ikon gerigi).');
+      throw Exception(
+          'URL Web App Google Apps Script belum disetting. Silakan buka menu Pengaturan (ikon gerigi).');
     }
 
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 15);
+    final uri = Uri.parse(baseUrl);
 
     try {
-      // Pada Google Apps Script, mengirim parameter via query params atau form-urlencoded
-      // Membantu memastikan e.parameter terbaca dengan presisi
-      final uri = Uri.parse(baseUrl).replace(queryParameters: params);
-      final request = await client.postUrl(uri);
-      
-      // Jangan auto follow redirect pada POST karena Google Apps Script melakukan redirect 302 ke GET echo
-      request.followRedirects = false;
-      request.headers.contentType = ContentType('application', 'x-www-form-urlencoded', charset: 'utf-8');
+      final response = await http.post(
+        uri,
+        body: params,
+      ).timeout(const Duration(seconds: 25));
 
-      final bodyString = params.entries
-          .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
-          .join('&');
-      request.write(bodyString);
-
-      final response = await request.close().timeout(const Duration(seconds: 20));
-
-      // Google Apps Script merespons 302 ke URL script.googleusercontent.com
-      if (response.statusCode == 302 || response.statusCode == 301 || response.statusCode == 303) {
-        final redirectUrl = response.headers.value(HttpHeaders.locationHeader);
+      if (response.statusCode >= 200 && response.statusCode < 400) {
+        return response.body;
+      } else if (response.statusCode == 302 ||
+          response.statusCode == 301 ||
+          response.statusCode == 303) {
+        final redirectUrl = response.headers['location'];
         if (redirectUrl != null && redirectUrl.isNotEmpty) {
-          final getReq = await client.getUrl(Uri.parse(redirectUrl));
-          getReq.followRedirects = true;
-          final getResp = await getReq.close().timeout(const Duration(seconds: 15));
-          final respBody = await getResp.transform(utf8.decoder).join();
-          return respBody;
+          final redirResp =
+              await http.get(Uri.parse(redirectUrl)).timeout(const Duration(seconds: 20));
+          return redirResp.body;
         }
       }
-
-      final respBody = await response.transform(utf8.decoder).join();
-      return respBody;
-    } on SocketException catch (_) {
-      throw Exception('Gagal mengirim data. Periksa koneksi internet Anda.');
-    } finally {
-      client.close();
+      return response.body;
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Gagal mengirim data ke server: $e');
     }
   }
 
@@ -98,7 +77,9 @@ class ApiService {
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded.map((item) => Krupuk.fromJson(item as Map<String, dynamic>)).toList();
+        return decoded
+            .map((item) => Krupuk.fromJson(item as Map<String, dynamic>))
+            .toList();
       }
       return [];
     } catch (e) {
@@ -147,7 +128,9 @@ class ApiService {
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded.map((item) => Penjualan.fromJson(item as Map<String, dynamic>)).toList();
+        return decoded
+            .map((item) => Penjualan.fromJson(item as Map<String, dynamic>))
+            .toList();
       }
       return [];
     } catch (e) {
@@ -180,7 +163,9 @@ class ApiService {
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded.map((item) => BahanBaku.fromJson(item as Map<String, dynamic>)).toList();
+        return decoded
+            .map((item) => BahanBaku.fromJson(item as Map<String, dynamic>))
+            .toList();
       }
       return [];
     } catch (e) {
@@ -220,4 +205,3 @@ class ApiService {
     return await _post(params);
   }
 }
-
