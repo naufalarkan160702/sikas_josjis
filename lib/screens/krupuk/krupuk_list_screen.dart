@@ -302,3 +302,4 @@ class _KrupukListScreenState extends State<KrupukListScreen> {
     );
   }
 }
+

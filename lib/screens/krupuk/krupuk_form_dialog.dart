@@ -185,3 +185,4 @@ class _KrupukFormDialogState extends State<KrupukFormDialog> {
     );
   }
 }
+

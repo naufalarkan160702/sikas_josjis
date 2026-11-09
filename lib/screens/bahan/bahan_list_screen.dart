@@ -293,3 +293,4 @@ class _BahanListScreenState extends State<BahanListScreen> {
 extension on BahanBaku {
   String get namaNamaBahanDisplay => namaBahan.isEmpty ? 'Bahan Tanpa Nama' : namaBahan;
 }
+
