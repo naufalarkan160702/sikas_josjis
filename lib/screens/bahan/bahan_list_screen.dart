@@ -22,25 +22,31 @@ class _BahanListScreenState extends State<BahanListScreen> {
     _fetchData();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _fetchData({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final list = await ApiService().fetchBahan();
-      setState(() {
-        _bahanList = list.reversed.toList(); // Urutan terbaru di atas
-      });
+      final list = await ApiService().fetchBahan(forceRefresh: forceRefresh);
+      if (mounted) {
+        setState(() {
+          _bahanList = list.reversed.toList(); // Urutan terbaru di atas
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -105,7 +111,7 @@ class _BahanListScreenState extends State<BahanListScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Segarkan',
-            onPressed: _fetchData,
+            onPressed: () => _fetchData(forceRefresh: true),
           ),
         ],
       ),
@@ -178,7 +184,7 @@ class _BahanListScreenState extends State<BahanListScreen> {
                               Text(_errorMessage!, textAlign: TextAlign.center),
                               const SizedBox(height: 16),
                               ElevatedButton.icon(
-                                onPressed: _fetchData,
+                                onPressed: () => _fetchData(forceRefresh: true),
                                 icon: const Icon(Icons.refresh),
                                 label: const Text('Coba Lagi'),
                               ),
@@ -201,7 +207,7 @@ class _BahanListScreenState extends State<BahanListScreen> {
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _fetchData,
+                            onRefresh: () => _fetchData(forceRefresh: true),
                             child: ListView.builder(
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: _bahanList.length,

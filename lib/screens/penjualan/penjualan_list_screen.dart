@@ -29,38 +29,41 @@ class _PenjualanListScreenState extends State<PenjualanListScreen> {
     _fetchData();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _fetchData({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final results = await Future.wait([
-        ApiService().fetchPenjualan(),
-        ApiService().fetchKrupuk().catchError((_) => <Krupuk>[]),
-      ]);
-
-      final penjualan = results[0] as List<Penjualan>;
-      final krupuk = results[1] as List<Krupuk>;
+      final penjualan = await ApiService().fetchPenjualan(forceRefresh: forceRefresh);
+      final krupuk = await ApiService()
+          .fetchKrupuk(forceRefresh: forceRefresh)
+          .catchError((_) => <Krupuk>[]);
 
       final nameMap = <String, String>{};
       for (final k in krupuk) {
         nameMap[k.idKrupuk] = k.namaKrupuk;
       }
 
-      setState(() {
-        _allPenjualan = penjualan.reversed.toList();
-        _krupukNameMap = nameMap;
-      });
+      if (mounted) {
+        setState(() {
+          _allPenjualan = penjualan.reversed.toList();
+          _krupukNameMap = nameMap;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

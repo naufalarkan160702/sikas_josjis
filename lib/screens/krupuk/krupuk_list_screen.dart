@@ -30,26 +30,32 @@ class _KrupukListScreenState extends State<KrupukListScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _fetchData({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final list = await ApiService().fetchKrupuk();
-      setState(() {
-        _allKrupuk = list;
-        _applySearch(_searchController.text);
-      });
+      final list = await ApiService().fetchKrupuk(forceRefresh: forceRefresh);
+      if (mounted) {
+        setState(() {
+          _allKrupuk = list;
+          _applySearch(_searchController.text);
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

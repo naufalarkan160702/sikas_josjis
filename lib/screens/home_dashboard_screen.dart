@@ -35,32 +35,39 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _loadAllData();
   }
 
-  Future<void> _loadAllData() async {
+  Future<void> _loadAllData({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final results = await Future.wait([
-        ApiService().fetchKrupuk().catchError((e) => <Krupuk>[]),
-        ApiService().fetchPenjualan().catchError((e) => <Penjualan>[]),
-        ApiService().fetchBahan().catchError((e) => <BahanBaku>[]),
-      ]);
+      final krupuk = await ApiService()
+          .fetchKrupuk(forceRefresh: forceRefresh)
+          .catchError((_) => <Krupuk>[]);
+      if (mounted) setState(() => _krupukList = krupuk);
 
-      setState(() {
-        _krupukList = results[0] as List<Krupuk>;
-        _penjualanList = results[1] as List<Penjualan>;
-        _bahanList = results[2] as List<BahanBaku>;
-      });
+      final penjualan = await ApiService()
+          .fetchPenjualan(forceRefresh: forceRefresh)
+          .catchError((_) => <Penjualan>[]);
+      if (mounted) setState(() => _penjualanList = penjualan);
+
+      final bahan = await ApiService()
+          .fetchBahan(forceRefresh: forceRefresh)
+          .catchError((_) => <BahanBaku>[]);
+      if (mounted) setState(() => _bahanList = bahan);
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -623,7 +630,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         ],
       ),
-      body: screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {

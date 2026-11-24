@@ -10,7 +10,35 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // Helper method untuk GET request
+  // In-memory Cache
+  List<Krupuk>? _cachedKrupuk;
+  DateTime? _cachedKrupukTime;
+
+  List<Penjualan>? _cachedPenjualan;
+  DateTime? _cachedPenjualanTime;
+
+  List<BahanBaku>? _cachedBahan;
+  DateTime? _cachedBahanTime;
+
+  // Durasi cache 3 menit untuk meminimalkan beban Google Apps Script
+  static const Duration _cacheDuration = Duration(minutes: 3);
+
+  void invalidateCache({bool krupuk = true, bool penjualan = true, bool bahan = true}) {
+    if (krupuk) {
+      _cachedKrupuk = null;
+      _cachedKrupukTime = null;
+    }
+    if (penjualan) {
+      _cachedPenjualan = null;
+      _cachedPenjualanTime = null;
+    }
+    if (bahan) {
+      _cachedBahan = null;
+      _cachedBahanTime = null;
+    }
+  }
+
+  // Helper method untuk GET request dengan batas waktu yang lebih toleran (50 detik)
   Future<String> _get(String action) async {
     final baseUrl = AppConfig.webAppUrl.trim();
     if (baseUrl.isEmpty) {
@@ -21,7 +49,7 @@ class ApiService {
     final uri = Uri.parse(baseUrl).replace(queryParameters: {'action': action});
 
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 25));
+      final response = await http.get(uri).timeout(const Duration(seconds: 50));
 
       if (response.statusCode >= 200 && response.statusCode < 400) {
         return response.body;
@@ -29,6 +57,10 @@ class ApiService {
         throw Exception('Server mengembalikan kode status: ${response.statusCode}');
       }
     } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception(
+            'Koneksi waktu habis (Timeout). Server Google Apps Script sedang warming up atau jaringan lambat. Silakan coba lagi.');
+      }
       if (e is Exception) rethrow;
       throw Exception('Gagal menghubungi server: $e');
     }
@@ -48,7 +80,7 @@ class ApiService {
       final response = await http.post(
         uri,
         body: params,
-      ).timeout(const Duration(seconds: 25));
+      ).timeout(const Duration(seconds: 50));
 
       if (response.statusCode >= 200 && response.statusCode < 400) {
         return response.body;
@@ -58,12 +90,15 @@ class ApiService {
         final redirectUrl = response.headers['location'];
         if (redirectUrl != null && redirectUrl.isNotEmpty) {
           final redirResp =
-              await http.get(Uri.parse(redirectUrl)).timeout(const Duration(seconds: 20));
+              await http.get(Uri.parse(redirectUrl)).timeout(const Duration(seconds: 35));
           return redirResp.body;
         }
       }
       return response.body;
     } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception('Koneksi waktu habis saat menyimpan data. Silakan coba lagi.');
+      }
       if (e is Exception) rethrow;
       throw Exception('Gagal mengirim data ke server: $e');
     }
@@ -72,14 +107,24 @@ class ApiService {
   // ==========================================
   // 1. DATA MASTER KERUPUK (data_krupuk)
   // ==========================================
-  Future<List<Krupuk>> fetchKrupuk() async {
+  Future<List<Krupuk>> fetchKrupuk({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedKrupuk != null &&
+        _cachedKrupukTime != null &&
+        DateTime.now().difference(_cachedKrupukTime!) < _cacheDuration) {
+      return _cachedKrupuk!;
+    }
+
     final jsonString = await _get('read_krupuk');
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded
+        final list = decoded
             .map((item) => Krupuk.fromJson(item as Map<String, dynamic>))
             .toList();
+        _cachedKrupuk = list;
+        _cachedKrupukTime = DateTime.now();
+        return list;
       }
       return [];
     } catch (e) {
@@ -101,7 +146,9 @@ class ApiService {
       'harga': harga.toInt().toString(),
       'deskripsi': deskripsi,
     };
-    return await _post(params);
+    final res = await _post(params);
+    invalidateCache(krupuk: true);
+    return res;
   }
 
   Future<String> updateKrupuk({
@@ -117,20 +164,32 @@ class ApiService {
       'harga': harga.toInt().toString(),
       'deskripsi': deskripsi,
     };
-    return await _post(params);
+    final res = await _post(params);
+    invalidateCache(krupuk: true);
+    return res;
   }
 
   // ==========================================
   // 2. KAS MASUK / PENJUALAN (penjualan_kerupuk)
   // ==========================================
-  Future<List<Penjualan>> fetchPenjualan() async {
+  Future<List<Penjualan>> fetchPenjualan({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedPenjualan != null &&
+        _cachedPenjualanTime != null &&
+        DateTime.now().difference(_cachedPenjualanTime!) < _cacheDuration) {
+      return _cachedPenjualan!;
+    }
+
     final jsonString = await _get('read_penjualan');
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded
+        final list = decoded
             .map((item) => Penjualan.fromJson(item as Map<String, dynamic>))
             .toList();
+        _cachedPenjualan = list;
+        _cachedPenjualanTime = DateTime.now();
+        return list;
       }
       return [];
     } catch (e) {
@@ -152,20 +211,32 @@ class ApiService {
       'jumlah_dijual': jumlahDijual.toString(),
       'total_penjualan': totalPenjualan.toInt().toString(),
     };
-    return await _post(params);
+    final res = await _post(params);
+    invalidateCache(penjualan: true);
+    return res;
   }
 
   // ==========================================
   // 3. KAS KELUAR / BELANJA BAHAN (belanja_bahan_baku)
   // ==========================================
-  Future<List<BahanBaku>> fetchBahan() async {
+  Future<List<BahanBaku>> fetchBahan({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedBahan != null &&
+        _cachedBahanTime != null &&
+        DateTime.now().difference(_cachedBahanTime!) < _cacheDuration) {
+      return _cachedBahan!;
+    }
+
     final jsonString = await _get('read_bahan');
     try {
       final decoded = jsonDecode(jsonString);
       if (decoded is List) {
-        return decoded
+        final list = decoded
             .map((item) => BahanBaku.fromJson(item as Map<String, dynamic>))
             .toList();
+        _cachedBahan = list;
+        _cachedBahanTime = DateTime.now();
+        return list;
       }
       return [];
     } catch (e) {
@@ -187,7 +258,9 @@ class ApiService {
       'kuantitas': kuantitas,
       'total_biaya': totalBiaya.toInt().toString(),
     };
-    return await _post(params);
+    final res = await _post(params);
+    invalidateCache(bahan: true);
+    return res;
   }
 
   // ==========================================
@@ -202,6 +275,16 @@ class ApiService {
       'sheet_name': sheetName,
       'id': id,
     };
-    return await _post(params);
+    final res = await _post(params);
+    if (sheetName.contains('krupuk')) {
+      invalidateCache(krupuk: true);
+    } else if (sheetName.contains('penjualan')) {
+      invalidateCache(penjualan: true);
+    } else if (sheetName.contains('bahan')) {
+      invalidateCache(bahan: true);
+    } else {
+      invalidateCache();
+    }
+    return res;
   }
 }
